@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .sunset-gradient {
+    background: linear-gradient(135deg, rgba(255, 183, 140, 0.28) 0%, rgba(255, 210, 180, 0.14) 45%, #ffffff 100%);
+  }
+}
+
 :root {
   --background: 222 84% 5%;
   --foreground: 210 40% 98%;
