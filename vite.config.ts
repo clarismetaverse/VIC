@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { componentTagger } from 'lovable-tagger';
 
 export default defineConfig(({ mode }) => ({
+  base: mode === 'github-pages' ? '/VIC/' : '/',
   plugins: [react(), mode === 'development' && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
