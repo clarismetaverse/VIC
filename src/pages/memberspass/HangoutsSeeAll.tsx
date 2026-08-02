@@ -58,11 +58,9 @@ export default function HangoutsSeeAll() {
           <p className="py-12 text-center text-sm text-neutral-400">No upcoming hangouts yet</p>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {hangouts.map((group) => (
-            <div key={group.key} className="w-full [&>div]:w-full">
-              <CityHangoutCard group={group} />
-            </div>
+            <CityHangoutCard key={group.key} group={group} variant="peopleFirst" />
           ))}
         </div>
       </div>
