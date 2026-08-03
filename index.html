@@ -19,6 +19,21 @@
     OneSignalDeferred.push(async function (OneSignal) {
       await OneSignal.init({
         appId: "1fd29660-6397-47cd-a0e6-d9e3ffafdeb4",
+        promptOptions: {
+          slidedown: {
+            prompts: [
+              {
+                type: "push",
+                autoPrompt: false,
+                text: {
+                  actionMessage: "Enable notifications to receive new participation requests for your activities.",
+                  acceptButton: "Enable",
+                  cancelButton: "Not now",
+                },
+              },
+            ],
+          },
+        },
       });
     });
   </script>
