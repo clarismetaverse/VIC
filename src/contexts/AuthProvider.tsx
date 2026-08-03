@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { AuthContextType, User } from "./AuthContext";
 import { UNAUTHORIZED_EVENT, apiFetch, getAuthToken, setAuthToken } from "@/services";
 import { fetchVicProfile } from "@/services/vic";
+import { clearOneSignalUser, identifyOneSignalUser } from "@/services/oneSignal";
 
 interface AuthResponse {
   auth_token?: string;
@@ -69,6 +70,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (user) {
+      identifyOneSignalUser(user.id);
+      return;
+    }
+
+    if (!isLoading) {
+      clearOneSignalUser();
+    }
+  }, [isLoading, user]);
 
   const login = useCallback(async (email: string, password: string) => {
     const data = await apiFetch<AuthResponse>("/auth_vic_login", {
