@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import CreatorCard from "@/components/memberspass/CreatorCard";
@@ -17,6 +18,9 @@ import { fetchCityHangouts, type HangoutGroup } from "@/services/cityHangouts";
 
 const HANGOUT_CITIES = ["Bali", "Dubai", "Milan"];
 const isBali = (city: string) => city.trim().toLowerCase() === "bali";
+const EMPTY_CREATORS: CreatorLite[] = [];
+const EMPTY_HANGOUTS: HangoutGroup[] = [];
+const MEMBERS_LARGE_INDEXES = new Set([0, 3]);
 
 
 export default function MemberspassVICHome() {
@@ -30,12 +34,6 @@ export default function MemberspassVICHome() {
   const [query, setQuery] = useState("");
   const [lastResults, setLastResults] = useState<CreatorLite[]>([]);
   const [selectedCreator, setSelectedCreator] = useState<CreatorLite | null>(null);
-  const [approvedMembers, setApprovedMembers] = useState<CreatorLite[]>([]);
-  const [pendingMembers, setPendingMembers] = useState<CreatorLite[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
-  const [hangouts, setHangouts] = useState<HangoutGroup[]>([]);
-  const [hangoutsLoading, setHangoutsLoading] = useState(true);
-  const [hangoutsError, setHangoutsError] = useState(false);
   const [hangoutCity, setHangoutCity] = useState(() => {
     if (typeof window === "undefined") return "Bali";
     return localStorage.getItem("owner_city") || "Bali";
@@ -48,64 +46,31 @@ export default function MemberspassVICHome() {
   const tagIds = hangoutTagIds(filters);
   const tagKey = tagIds.join(",");
 
+  const membersQuery = useQuery({
+    queryKey: ["vic-members"],
+    queryFn: fetchVicMembers,
+  });
+  const approvedMembers = membersQuery.data?.approved ?? EMPTY_CREATORS;
+  const pendingMembers = membersQuery.data?.pending ?? EMPTY_CREATORS;
+  const membersLoading = membersQuery.isPending && !membersQuery.data;
+
+  const hangoutsQuery = useQuery({
+    queryKey: ["city-hangouts", hangoutCity, tagKey, debouncedKeyword],
+    queryFn: () =>
+      fetchCityHangouts(hangoutCity, {
+        tagIds: tagKey ? tagKey.split(",").map(Number) : [],
+        keyword: debouncedKeyword,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const hangouts = hangoutsQuery.data ?? EMPTY_HANGOUTS;
+  const hangoutsLoading = hangoutsQuery.isPending && !hangoutsQuery.data;
+  const hangoutsError = hangoutsQuery.isError && !hangoutsQuery.data;
+
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedKeyword(filters.keyword.trim()), 350);
     return () => window.clearTimeout(handle);
   }, [filters.keyword]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadMembers = async () => {
-      setMembersLoading(true);
-      try {
-        const { approved, pending } = await fetchVicMembers();
-        if (!active) return;
-        setApprovedMembers(approved);
-        setPendingMembers(pending);
-      } finally {
-        if (active) setMembersLoading(false);
-      }
-    };
-
-    loadMembers();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadHangouts = async () => {
-      setHangoutsLoading(true);
-      setHangoutsError(false);
-      try {
-        const items = await fetchCityHangouts(hangoutCity, {
-          tagIds: tagKey ? tagKey.split(",").map(Number) : [],
-          keyword: debouncedKeyword,
-        });
-        if (!active) return;
-        setHangouts(items);
-      } catch (err) {
-        console.error("Failed to load city hangouts", err);
-        if (active) {
-          setHangouts([]);
-          setHangoutsError(true);
-        }
-      } finally {
-        if (active) setHangoutsLoading(false);
-      }
-    };
-
-    loadHangouts();
-
-    return () => {
-      active = false;
-    };
-  }, [hangoutCity, tagKey, debouncedKeyword]);
-
 
   const displayCreators = useMemo(() => {
     if (lastResults.length) return lastResults.slice(0, 10);
@@ -115,9 +80,6 @@ export default function MemberspassVICHome() {
   const membersCreators = useMemo(() => approvedMembers.slice(0, 12), [approvedMembers]);
   const pendingCreators = useMemo(() => pendingMembers.slice(0, 12), [pendingMembers]);
   const isSearchActive = isSearchFocused || query.trim().length > 0;
-
-  const membersLargeIndexes = new Set([0, 3]);
-
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#0B0B0F]">
@@ -215,7 +177,7 @@ export default function MemberspassVICHome() {
                   {membersCreators.map((creator, index) => (
                     <div
                       key={`members-${creator.id}-${index}`}
-                      className={`${membersLargeIndexes.has(index) ? "w-[260px]" : "w-[220px]"} shrink-0 snap-start`}
+                      className={`${MEMBERS_LARGE_INDEXES.has(index) ? "w-[260px]" : "w-[220px]"} shrink-0 snap-start`}
                     >
                       <CreatorCard creator={creator} variant="vic" size="large" />
                     </div>
@@ -228,7 +190,7 @@ export default function MemberspassVICHome() {
               <div className="flex items-center justify-between px-1">
                 <h2 className="text-base font-semibold text-neutral-900">Pending members</h2>
                 <span className="text-xs text-neutral-400">
-                  {membersLoading ? "Loading…" : `${pendingCreators.length} pending`}
+                  {membersLoading ? "Loadingâ€¦" : `${pendingCreators.length} pending`}
                 </span>
               </div>
               {membersLoading ? (
@@ -300,7 +262,7 @@ export default function MemberspassVICHome() {
                 </div>
               ) : hangoutsError ? (
                 <div className="rounded-2xl border border-dashed border-neutral-200 bg-white px-4 py-6 text-center text-xs text-neutral-500">
-                  We couldn’t load hangouts right now. Please try again.
+                  We couldnâ€™t load hangouts right now. Please try again.
                 </div>
               ) : hangouts.length === 0 ? (
                 <div className="space-y-2 rounded-2xl border border-dashed border-neutral-200 bg-white px-4 py-6 text-center">
