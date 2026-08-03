@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CreatorCard from "@/components/memberspass/CreatorCard";
 import type { CreatorLite } from "@/services/creatorSearch";
 import { fetchNewInTown } from "@/services/newInTown";
+import { fetchVicMembers } from "@/services/vicMembers";
 
 type SeeAllState = {
   title: string;
@@ -15,17 +16,23 @@ export default function MembersSeeAll() {
   const location = useLocation();
   const passedState = location.state as SeeAllState | null;
 
-  const [creators, setCreators] = useState<CreatorLite[]>(passedState?.creators ?? []);
-  const [loading, setLoading] = useState(!passedState?.creators?.length);
   const title = passedState?.title ?? "Members";
-
-  useEffect(() => {
-    if (!passedState?.creators?.length) {
-      fetchNewInTown()
-        .then(setCreators)
-        .finally(() => setLoading(false));
-    }
-  }, []);
+  const membersQuery = useQuery({
+    queryKey: ["vic-members"],
+    queryFn: fetchVicMembers,
+  });
+  const fallbackQuery = useQuery({
+    queryKey: ["new-in-town"],
+    queryFn: fetchNewInTown,
+    enabled: !passedState?.creators?.length && !membersQuery.data,
+  });
+  const creators =
+    passedState?.creators?.length
+      ? passedState.creators
+      : membersQuery.data?.approved ?? fallbackQuery.data ?? [];
+  const loading =
+    creators.length === 0 &&
+    (membersQuery.isPending || fallbackQuery.isPending);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#0B0B0F]">
@@ -46,7 +53,7 @@ export default function MembersSeeAll() {
 
       <div className="mx-auto w-full max-w-md space-y-4 px-4 pb-16 pt-6">
         {loading && (
-          <p className="py-12 text-center text-sm text-neutral-400">Loading…</p>
+          <p className="py-12 text-center text-sm text-neutral-400">Loadingâ€¦</p>
         )}
 
         {!loading && creators.map((creator) => (
