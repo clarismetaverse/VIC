@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CityHangoutCard from "@/components/memberspass/CityHangoutCard";
@@ -15,24 +15,13 @@ export default function HangoutsSeeAll() {
   const passedState = location.state as SeeAllState | null;
   const city = passedState?.city ?? "Bali";
 
-  const [hangouts, setHangouts] = useState<HangoutGroup[]>(passedState?.hangouts ?? []);
-  const [loading, setLoading] = useState(!passedState?.hangouts?.length);
-
-  useEffect(() => {
-    if (passedState?.hangouts?.length) return;
-    let active = true;
-    fetchCityHangouts(city)
-      .then((items) => {
-        if (active) setHangouts(items);
-      })
-      .catch((err) => console.error("Failed to load city hangouts", err))
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [city]);
+  const hangoutsQuery = useQuery({
+    queryKey: ["city-hangouts", city, "", ""],
+    queryFn: () => fetchCityHangouts(city),
+    initialData: passedState?.hangouts,
+  });
+  const hangouts = hangoutsQuery.data ?? [];
+  const loading = hangoutsQuery.isPending && !hangoutsQuery.data;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#0B0B0F]">
@@ -52,10 +41,14 @@ export default function HangoutsSeeAll() {
       </div>
 
       <div className="mx-auto w-full max-w-md px-4 pb-16 pt-6">
-        {loading && <p className="py-12 text-center text-sm text-neutral-400">Loading…</p>}
+        {loading && <p className="py-12 text-center text-sm text-neutral-400">Loadingâ€¦</p>}
 
-        {!loading && hangouts.length === 0 && (
+        {!loading && !hangoutsQuery.isError && hangouts.length === 0 && (
           <p className="py-12 text-center text-sm text-neutral-400">No upcoming hangouts yet</p>
+        )}
+
+        {hangoutsQuery.isError && hangouts.length === 0 && (
+          <p className="py-12 text-center text-sm text-neutral-400">We couldnâ€™t refresh hangouts right now</p>
         )}
 
         <div className="grid grid-cols-1 gap-3">
