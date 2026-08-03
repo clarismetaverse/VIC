@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Mail, MapPin, Plane, Palmtree, ChevronRight, UserRound } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { createEvent, fetchEventTemps, type EventTemp, type InviteLite, type TripActivity } from "@/services/activities";
@@ -63,6 +64,10 @@ const easeOut = { duration: 0.35, ease: "easeOut" as const };
 const ACTIVITY_PLACEHOLDER_COVER =
   "https://images.unsplash.com/photo-1519677100203-a0e668c92439?auto=format&fit=crop&w=1200&q=80";
 const SHOW_DISCOVERY_SECTIONS = false;
+type InvitedPreviewByActivity = Record<number, Array<{ id: number; name: string; avatarUrl: string }>>;
+const EMPTY_ACTIVITIES: Activity[] = [];
+const EMPTY_TRIP_ACTIVITIES: TripActivity[] = [];
+const EMPTY_INVITED_PREVIEWS: InvitedPreviewByActivity = {};
 
 const statusLabelMap: Record<ActivityStatus, string> = {
   draft: "Draft",
@@ -107,61 +112,58 @@ const mapActivityToTrip = (activity: Activity): TripActivity => {
   };
 };
 
+async function fetchActivitiesHomeData() {
+  const activities = await fetchVicActivities();
+  const entries = await Promise.all(
+    activities.map(async (activity) => {
+      try {
+        const invited = await fetchActivityInvited(activity.id);
+        const creators = invited
+          .filter((item) => item.type === "invited" && item._user_turbo)
+          .map((item) => ({
+            id: item.user_turbo_id,
+            name: item._user_turbo?.name || "Invited",
+            avatarUrl: item._user_turbo?.Profile_pic?.url || "",
+          }))
+          .filter((creator) => creator.avatarUrl);
+        return [activity.id, creators] as const;
+      } catch {
+        return [activity.id, []] as const;
+      }
+    }),
+  );
+
+  return {
+    activities,
+    trips: activities.map(mapActivityToTrip),
+    invitedByActivity: Object.fromEntries(entries) as InvitedPreviewByActivity,
+  };
+}
+
 export default function ActivitiesHome() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<ActivityFormState>({ name: "", city: "", date: "", tags: [] });
-  const [myActivities, setMyActivities] = useState<TripActivity[]>([]);
-  const [myActivitiesRaw, setMyActivitiesRaw] = useState<Activity[]>([]);
-  const [myActivitiesLoading, setMyActivitiesLoading] = useState(true);
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
   const [inviteFilterType, setInviteFilterType] = useState<"local" | "trip" | "bali">("local");
   const [eventTemps, setEventTemps] = useState<EventTemp[]>([]);
   const [eventTempsLoading, setEventTempsLoading] = useState(true);
   const [suggestedLocations, setSuggestedLocations] = useState<VicLocation[]>([]);
   const [suggestedLocationsLoading, setSuggestedLocationsLoading] = useState(true);
-  const [invitedByActivity, setInvitedByActivity] = useState<Record<number, Array<{ id: number; name: string; avatarUrl: string }>>>({});
+  const activitiesHomeQuery = useQuery({
+    queryKey: ["vic-activities-home"],
+    queryFn: fetchActivitiesHomeData,
+  });
+  const myActivities = activitiesHomeQuery.data?.trips ?? EMPTY_TRIP_ACTIVITIES;
+  const myActivitiesRaw = activitiesHomeQuery.data?.activities ?? EMPTY_ACTIVITIES;
+  const invitedByActivity = activitiesHomeQuery.data?.invitedByActivity ?? EMPTY_INVITED_PREVIEWS;
+  const myActivitiesLoading = activitiesHomeQuery.isPending && !activitiesHomeQuery.data;
 
   useEffect(() => {
-    const loadActivities = async () => {
-      setMyActivitiesLoading(true);
-      try {
-        const activities = await fetchVicActivities();
-        setMyActivitiesRaw(activities);
-        setMyActivities(activities.map(mapActivityToTrip));
-
-        // Fetch invited creators per activity in parallel
-        const entries = await Promise.all(
-          activities.map(async (a) => {
-            try {
-              const invited = await fetchActivityInvited(a.id);
-              const creators = invited
-                .filter((i) => i.type === "invited" && i._user_turbo)
-                .map((i) => ({
-                  id: i.user_turbo_id,
-                  name: i._user_turbo?.name || "Invited",
-                  avatarUrl: i._user_turbo?.Profile_pic?.url || "",
-                }))
-                .filter((c) => c.avatarUrl);
-              return [a.id, creators] as const;
-            } catch {
-              return [a.id, []] as const;
-            }
-          })
-        );
-        setInvitedByActivity(Object.fromEntries(entries));
-      } catch (error) {
-        console.error("Failed to load activities/me", error);
-        setMyActivitiesRaw([]);
-        setMyActivities([]);
-      } finally {
-        setMyActivitiesLoading(false);
-      }
-    };
-
     const loadEventTemps = async () => {
       setEventTempsLoading(true);
       try {
@@ -188,7 +190,6 @@ export default function ActivitiesHome() {
       }
     };
 
-    void loadActivities();
     if (SHOW_DISCOVERY_SECTIONS) {
       void loadEventTemps();
       void loadSuggestedLocations();
@@ -443,7 +444,7 @@ export default function ActivitiesHome() {
           className="space-y-3"
         >
           <div className="px-1">
-            <h2 className="text-sm font-semibold text-neutral-900">✨ Highlights and International events 🌍</h2>
+            <h2 className="text-sm font-semibold text-neutral-900">âœ¨ Highlights and International events ðŸŒ</h2>
           </div>
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
             {eventTempsLoading ? (
@@ -528,7 +529,7 @@ export default function ActivitiesHome() {
                           ))}
                         </div>
                         <span className="text-[10.5px] font-medium text-neutral-500">
-                          Liked by {likedCount} models · {2 + ((loc.id * 5) % 14)} events held
+                          Liked by {likedCount} models Â· {2 + ((loc.id * 5) % 14)} events held
                         </span>
 
                       </div>
@@ -640,6 +641,7 @@ export default function ActivitiesHome() {
                       Tags: form.tags,
                       Cover: null,
                     });
+                    await queryClient.invalidateQueries({ queryKey: ["vic-activities-home"] });
                     setSheetOpen(false);
                     navigate(inviteRoute, {
                       state: {
@@ -657,7 +659,7 @@ export default function ActivitiesHome() {
                 }}
                 className="mt-5 w-full rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {submitting ? "Creating…" : "Continue"}
+                {submitting ? "Creatingâ€¦" : "Continue"}
               </button>
             </motion.section>
           </>
