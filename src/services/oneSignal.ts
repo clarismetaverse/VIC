@@ -50,6 +50,17 @@ export function identifyOneSignalUser(userId: number) {
       }
 
       await oneSignal.Slidedown.promptPush();
+
+      // The browser subscription is created only after consent. Log in again
+      // so OneSignal attaches the new subscription to the VIC external ID.
+      await oneSignal.login(String(userId));
+
+      if (
+        oneSignal.Notifications.permission &&
+        !oneSignal.User.PushSubscription.optedIn
+      ) {
+        await oneSignal.User.PushSubscription.optIn();
+      }
     } catch (error) {
       console.warn("[OneSignal] Failed to identify or subscribe VIC user", error);
     }
