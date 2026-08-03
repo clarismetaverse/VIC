@@ -62,6 +62,7 @@ const cinematicTemplates: ActivitySeed[] = [
 const easeOut = { duration: 0.35, ease: "easeOut" as const };
 const ACTIVITY_PLACEHOLDER_COVER =
   "https://images.unsplash.com/photo-1519677100203-a0e668c92439?auto=format&fit=crop&w=1200&q=80";
+const SHOW_DISCOVERY_SECTIONS = false;
 
 const statusLabelMap: Record<ActivityStatus, string> = {
   draft: "Draft",
@@ -188,8 +189,10 @@ export default function ActivitiesHome() {
     };
 
     void loadActivities();
-    void loadEventTemps();
-    void loadSuggestedLocations();
+    if (SHOW_DISCOVERY_SECTIONS) {
+      void loadEventTemps();
+      void loadSuggestedLocations();
+    }
   }, []);
 
   const inviteRoute = useMemo(
@@ -433,7 +436,7 @@ export default function ActivitiesHome() {
           );
         })()}
 
-        <motion.section
+        {SHOW_DISCOVERY_SECTIONS && <motion.section
           initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ ...easeOut, delay: 0.1 }}
@@ -476,9 +479,9 @@ export default function ActivitiesHome() {
             )}
           </div>
 
-        </motion.section>
+        </motion.section>}
 
-        <motion.section
+        {SHOW_DISCOVERY_SECTIONS && <motion.section
           initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ ...easeOut, delay: 0.15 }}
@@ -544,7 +547,7 @@ export default function ActivitiesHome() {
             )}
           </div>
 
-        </motion.section>
+        </motion.section>}
       </main>
 
       <AnimatePresence>
