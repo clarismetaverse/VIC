@@ -1,6 +1,19 @@
 interface OneSignalWebSdk {
   login: (externalId: string) => Promise<void>;
   logout: () => Promise<void>;
+  Notifications: {
+    permission: boolean;
+    isPushSupported: () => boolean;
+  };
+  Slidedown: {
+    promptPush: () => Promise<void>;
+  };
+  User: {
+    PushSubscription: {
+      optedIn: boolean;
+      optIn: () => Promise<void>;
+    };
+  };
 }
 
 type OneSignalDeferredCallback = (oneSignal: OneSignalWebSdk) => void | Promise<void>;
@@ -24,8 +37,21 @@ export function identifyOneSignalUser(userId: number) {
   withOneSignal(async (oneSignal) => {
     try {
       await oneSignal.login(String(userId));
+
+      if (!oneSignal.Notifications.isPushSupported()) {
+        return;
+      }
+
+      if (oneSignal.Notifications.permission) {
+        if (!oneSignal.User.PushSubscription.optedIn) {
+          await oneSignal.User.PushSubscription.optIn();
+        }
+        return;
+      }
+
+      await oneSignal.Slidedown.promptPush();
     } catch (error) {
-      console.warn("[OneSignal] Failed to identify VIC user", error);
+      console.warn("[OneSignal] Failed to identify or subscribe VIC user", error);
     }
   });
 }
