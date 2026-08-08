@@ -13,6 +13,7 @@ export interface HangoutGroup {
   restaurantCover?: string;
   date: string; // BookingDay YYYY-MM-DD
   timeframe?: string; // e.g. "19:00 – 21:00" or "Anytime"
+  isPast: boolean;
   models: HangoutModel[];
 }
 
@@ -46,6 +47,7 @@ interface RawHangout {
 
 
 const BASE = "https://xbut-eryu-hhsg.f2.xano.io/api:bwh6Xc5O";
+const ROCKFISH_RESTAURANT_ID = 1158;
 
 function buildTimeframe(h: RawHangout): string | undefined {
   const pad = (s?: string | null) => {
@@ -74,8 +76,10 @@ const CITY_IDS: Record<string, number> = {
   bali: 3,
 };
 
-function localToday(): string {
+function localDateDaysAgo(days: number): string {
   const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
@@ -93,7 +97,7 @@ export async function fetchCityHangouts(
   const url = new URL(`${BASE}/modelhangouts`);
   const cityId = city ? CITY_IDS[city.trim().toLowerCase()] : undefined;
   if (cityId) url.searchParams.set("city_id", String(cityId));
-  url.searchParams.set("from_date", localToday());
+  url.searchParams.set("from_date", localDateDaysAgo(7));
 
   const tagIds = (filters?.tagIds ?? [])
     .map((id) => Number(id))
@@ -120,7 +124,7 @@ export async function fetchCityHangouts(
     if (h.canceled) continue;
     if (!h.restaurant_id || !h.BookingDay) continue;
     const dateObj = new Date(`${h.BookingDay}T00:00:00`);
-    if (Number.isNaN(dateObj.getTime()) || dateObj < today) continue;
+    if (Number.isNaN(dateObj.getTime())) continue;
 
 
     const key = `${h.restaurant_id}-${h.BookingDay}`;
@@ -133,6 +137,7 @@ export async function fetchCityHangouts(
         restaurantCover: h._restaurant_turbo?.Cover?.url,
         date: h.BookingDay,
         timeframe: buildTimeframe(h),
+        isPast: dateObj < today,
         models: [],
       };
       groups.set(key, g);
@@ -147,6 +152,33 @@ export async function fetchCityHangouts(
       });
     }
 
+  }
+
+  // Rockfish is a weekly activity. Until bookings exist for the next edition,
+  // keep its upcoming occurrence visible as a separate, empty card.
+  const latestRockfish = Array.from(groups.values())
+    .filter((group) => group.restaurantId === ROCKFISH_RESTAURANT_ID)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+  if (latestRockfish?.isPast) {
+    const nextDate = new Date(`${latestRockfish.date}T00:00:00`);
+    nextDate.setDate(nextDate.getDate() + 7);
+    const nextDateValue = [
+      nextDate.getFullYear(),
+      String(nextDate.getMonth() + 1).padStart(2, "0"),
+      String(nextDate.getDate()).padStart(2, "0"),
+    ].join("-");
+    const nextKey = `${latestRockfish.restaurantId}-${nextDateValue}`;
+
+    if (nextDate >= today && !groups.has(nextKey)) {
+      groups.set(nextKey, {
+        ...latestRockfish,
+        key: nextKey,
+        date: nextDateValue,
+        isPast: false,
+        models: [],
+      });
+    }
   }
 
   return Array.from(groups.values())
